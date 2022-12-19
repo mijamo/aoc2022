@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq)]
 enum Choice {
     Rock,
     Paper,
@@ -38,16 +38,12 @@ impl Choice {
         }
     }
 
-    fn from_second_column(opponant_choice: &Self, input: &str) -> Result<Self, InvalidInputError> {
-        match (input, opponant_choice) {
-            ("X", Self::Paper) => Ok(Self::Rock),
-            ("X", Self::Rock) => Ok(Self::Scissors),
-            ("X", Self::Scissors) => Ok(Self::Paper),
-            ("Y", _) => Ok(*opponant_choice),
-            ("Z", Self::Paper) => Ok(Self::Scissors),
-            ("Z", Self::Rock) => Ok(Self::Paper),
-            ("Z", Self::Scissors) => Ok(Self::Rock),
-            (_, _) => Err(InvalidInputError {}),
+    fn from_second_column(input: &str) -> Result<Self, InvalidInputError> {
+        match input {
+            "X" => Ok(Self::Rock),
+            "Y" => Ok(Self::Paper),
+            "Z" => Ok(Self::Scissors),
+            _ => Err(InvalidInputError {}),
         }
     }
 
@@ -78,8 +74,7 @@ fn main() -> std::io::Result<()> {
         let line_content = line.unwrap();
         if line_content.len() == 3 {
             let opponant_choice = Choice::from_first_column(&line_content[0..1]).unwrap();
-            let self_choice =
-                Choice::from_second_column(&opponant_choice, &line_content[2..3]).unwrap();
+            let self_choice = Choice::from_second_column(&line_content[2..3]).unwrap();
             total_score += score_round(&self_choice, &opponant_choice);
         }
     }
