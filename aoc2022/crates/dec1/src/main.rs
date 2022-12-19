@@ -39,8 +39,10 @@ impl ElveRegister {
         return self.elves.last_mut().unwrap();
     }
 
-    fn elves_carrying_most(&self) -> Option<&ElveSupply> {
-        return self.elves.iter().max_by(|a, b| a.calories.cmp(&b.calories));
+    fn elves_by_calories(&self) -> Vec<&ElveSupply> {
+        let mut new_vec: Vec<&ElveSupply> = self.elves.iter().collect();
+        new_vec.sort_by(|a, b| b.calories.cmp(&a.calories));
+        return new_vec;
     }
 }
 
@@ -58,10 +60,9 @@ fn main() -> std::io::Result<()> {
             current_elve.register_food(value);
         }
     }
-    let greatest_elve = elves_register.elves_carrying_most().unwrap();
-    println!(
-        "Greatest is elve n {} who carries {} calories",
-        greatest_elve.id, greatest_elve.calories
-    );
+    let elves_carryings_most = elves_register.elves_by_calories();
+    let top_three = &elves_carryings_most[0..3];
+    let sum_of_calories = top_three.iter().fold(0, |acc, elve| elve.calories + acc);
+    println!("Top three elves gather {} together", sum_of_calories);
     Ok(())
 }
