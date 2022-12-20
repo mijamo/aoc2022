@@ -150,16 +150,19 @@ fn main() -> std::io::Result<()> {
             None => {}
         }
     }
-    let total_calculated_size = state
+    let available_space = 70000000 - state.dir_size(0);
+    let minimum_to_delete = 30000000 - available_space;
+    let minimum_folder_to_delete = state
         .folders
         .iter()
         .enumerate()
-        .map(|(i, _)| (i, state.dir_size(i)))
-        .filter(|(_, size)| *size <= 100000)
-        .fold(0, |acc, (_, size)| acc + size);
+        .map(|(i, _)| state.dir_size(i))
+        .filter(|s| *s > minimum_to_delete)
+        .min()
+        .unwrap();
     println!(
-        "We calculated a total size for folders that are lower than 100000 of {}",
-        total_calculated_size
+        "The smallest directory we cna delete has a size of {}",
+        minimum_folder_to_delete
     );
     Ok(())
 }
