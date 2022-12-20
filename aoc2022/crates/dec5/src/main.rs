@@ -36,12 +36,15 @@ impl<'a> Ship<'a> {
         }
     }
 
-    fn move_crates(&self, from: usize, to: usize, quantity: i32) {
+    fn move_crates(&self, from: usize, to: usize, quantity: usize) {
         let from_stack = self.stacks.get(from - 1).unwrap();
         let to_stack = self.stacks.get(to - 1).unwrap();
-        for _ in 0..quantity {
-            to_stack.push(from_stack.pop().unwrap())
-        }
+        let mut from_crates = from_stack.crates.borrow_mut();
+        let length = from_crates.len();
+        to_stack
+            .crates
+            .borrow_mut()
+            .extend(from_crates.drain(length - quantity..length))
     }
 }
 
@@ -94,7 +97,7 @@ fn main() -> std::io::Result<()> {
             break;
         }
         let capt = move_regex.captures(&content).unwrap();
-        let move_quantity: i32 = cap_to_usize(capt.get(1)).try_into().unwrap();
+        let move_quantity = cap_to_usize(capt.get(1));
         let move_from = cap_to_usize(capt.get(2));
         let move_to = cap_to_usize(capt.get(3));
         ship.move_crates(move_from, move_to, move_quantity);
