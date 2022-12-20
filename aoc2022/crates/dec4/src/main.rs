@@ -13,6 +13,10 @@ impl SectionRange {
         return (self.start >= other.start && self.end <= other.end)
             || (self.start <= other.start && self.end >= other.end);
     }
+
+    fn overlap(&self, other: &Self) -> bool {
+        return self.start <= other.end && self.end >= other.start;
+    }
 }
 
 fn cap_to_i32(cap: Option<Match>) -> i32 {
@@ -35,10 +39,10 @@ fn main() -> std::io::Result<()> {
             start: cap_to_i32(captures.get(3)),
             end: cap_to_i32(captures.get(4)),
         };
-        if first_elve_range.full_overlap(&second_elve_range) {
+        if first_elve_range.overlap(&second_elve_range) {
             overlapping += 1;
         }
     }
-    println!("There are {overlapping} assignments that are fully overlapping");
+    println!("There are {overlapping} assignments that are overlapping");
     Ok(())
 }
