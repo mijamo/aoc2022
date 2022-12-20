@@ -12,21 +12,34 @@ fn priority(input: &char) -> i32 {
 
 fn main() -> std::io::Result<()> {
     let file = File::open("./src/input.txt")?;
-    let lines = BufReader::new(file).lines();
+    let mut lines = BufReader::new(file).lines();
     let mut total_priority = 0;
-    for line in lines {
-        let line_content = line.unwrap();
-        if line_content.len() > 0 {
-            let first_compartment = &line_content[0..line_content.len() / 2];
-            let second_compartment = &line_content[line_content.len() / 2..line_content.len()];
-            let letters_in_first = HashSet::<char>::from_iter(first_compartment.chars());
-            let letters_in_second = HashSet::<char>::from_iter(second_compartment.chars());
-            let letter_in_both = letters_in_first
-                .intersection(&letters_in_second)
-                .next()
-                .unwrap();
-            total_priority += priority(letter_in_both);
-        }
+    loop {
+        let line = lines.next();
+        let line_content = match line {
+            None => break,
+            Some(Err(_)) => break,
+            Some(Ok(content)) => content,
+        };
+        if &line_content == "" {
+            break;
+        };
+        let group = [
+            line_content,
+            lines.next().unwrap().unwrap(),
+            lines.next().unwrap().unwrap(),
+        ];
+        let letters = group.map(|g| g.chars().collect::<HashSet<char>>());
+        let letter_in_common = letters
+            .iter()
+            .fold(letters[0].clone(), |acc, set| {
+                acc.intersection(set).map(|v| *v).collect::<HashSet<char>>()
+            })
+            .iter()
+            .next()
+            .unwrap()
+            .clone();
+        total_priority += priority(&letter_in_common);
     }
     println!("The total priority of all rucksacks is {}", total_priority);
     Ok(())
