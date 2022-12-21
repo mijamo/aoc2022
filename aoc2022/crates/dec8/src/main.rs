@@ -261,16 +261,60 @@ fn main() -> std::io::Result<()> {
             })
             .collect::<Vec<Vec<i8>>>(),
     );
-    let visibility = VisibleTrees::from_layout(&layout, Direction::Left)
-        .combine(&VisibleTrees::from_layout(&layout, Direction::Right))
-        .combine(&VisibleTrees::from_layout(&layout, Direction::Top))
-        .combine(&VisibleTrees::from_layout(&layout, Direction::Bottom));
-    let count_visible: usize = visibility
-        .visible
+    let height = layout.height();
+    let width = layout.width();
+    let highest_vis = layout
+        .trees
         .iter()
-        .map(|row| row.iter().filter(|v| **v == true).count())
-        .sum();
-    visibility.print();
-    println!("Found {} visible trees", count_visible);
+        .enumerate()
+        .map(|(y, row)| {
+            row.iter()
+                .enumerate()
+                .map(|(x, tree_height)| {
+                    let mut pos_x = x;
+                    let mut pos_y = y;
+                    let mut top_score = 0;
+                    let mut bottom_score = 0;
+                    let mut left_score = 0;
+                    let mut right_score = 0;
+                    while pos_x < width - 1 {
+                        right_score += 1;
+                        pos_x += 1;
+                        if layout.trees[y][pos_x] >= *tree_height {
+                            break;
+                        }
+                    }
+                    pos_x = x;
+                    while pos_x > 0 {
+                        left_score += 1;
+                        pos_x -= 1;
+                        if layout.trees[y][pos_x] >= *tree_height {
+                            break;
+                        }
+                    }
+                    pos_x = x;
+                    while pos_y < height - 1 {
+                        bottom_score += 1;
+                        pos_y += 1;
+                        if layout.trees[pos_y][x] >= *tree_height {
+                            break;
+                        }
+                    }
+                    pos_y = y;
+                    while pos_y > 0 {
+                        top_score += 1;
+                        pos_y -= 1;
+                        if layout.trees[pos_y][x] >= *tree_height {
+                            break;
+                        }
+                    }
+                    return top_score * bottom_score * left_score * right_score;
+                })
+                .max()
+                .unwrap()
+        })
+        .max()
+        .unwrap();
+    println!("Largest scenary score is {}", highest_vis);
     Ok(())
 }
