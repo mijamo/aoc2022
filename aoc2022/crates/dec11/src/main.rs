@@ -17,11 +17,11 @@ enum Operand {
 
 enum OperationTarget {
     Old,
-    Number(i32),
+    Number(i64),
 }
 
 impl OperationTarget {
-    fn value(&self, old: i32) -> i32 {
+    fn value(&self, old: i64) -> i64 {
         match self {
             Self::Old => old,
             Self::Number(nb) => *nb,
@@ -36,7 +36,7 @@ struct Operation {
 }
 
 enum ConditionFn {
-    DivisibleBy(i32),
+    DivisibleBy(i64),
 }
 
 struct Condition {
@@ -46,14 +46,14 @@ struct Condition {
 }
 
 struct Monkey {
-    items: VecDeque<i32>,
+    items: VecDeque<i64>,
     operation: Operation,
     condition: Condition,
-    handle_counter: u32,
+    handle_counter: u64,
 }
 
 impl Monkey {
-    fn handle_item(&mut self, item: i32) -> (i32, usize) {
+    fn handle_item(&mut self, item: i64, modulo: i64) -> (i64, usize) {
         self.handle_counter += 1;
         let lhs_value = self.operation.lhs.value(item);
         let rhs_value = self.operation.rhs.value(item);
@@ -61,7 +61,7 @@ impl Monkey {
             Operand::Add => lhs_value + rhs_value,
             Operand::Mutiply => lhs_value * rhs_value,
         };
-        let relief_value = intermediate_value / 3;
+        let relief_value = intermediate_value % modulo;
         let target = match self.condition.test {
             ConditionFn::DivisibleBy(modulo) if relief_value % modulo == 0 => {
                 self.condition.when_true
@@ -77,10 +77,21 @@ struct Troop {
 }
 
 impl Troop {
+    fn modulo(&self) -> i64 {
+        return self
+            .monkeys
+            .iter()
+            .map(|m| match m.borrow().condition.test {
+                ConditionFn::DivisibleBy(divisible_by) => divisible_by,
+            })
+            .product();
+    }
+
     fn monkey_turn(&mut self, idx: usize) {
+        let modulo = self.modulo();
         let mut monkey = self.monkeys.get(idx).unwrap().borrow_mut();
         while let Some(item) = monkey.items.pop_front() {
-            let (new_value, target) = monkey.handle_item(item);
+            let (new_value, target) = monkey.handle_item(item, modulo);
             self.monkeys
                 .get(target)
                 .unwrap()
@@ -97,15 +108,15 @@ impl Troop {
     }
 }
 
-fn integer(input: &str) -> IResult<&str, i32> {
-    map_res(digit1, str::parse::<i32>)(input)
+fn integer(input: &str) -> IResult<&str, i64> {
+    map_res(digit1, str::parse::<i64>)(input)
 }
 
 fn index_value(input: &str) -> IResult<&str, usize> {
     map_res(digit1, str::parse::<usize>)(input)
 }
 
-fn starting_items(input: &str) -> IResult<&str, VecDeque<i32>> {
+fn starting_items(input: &str) -> IResult<&str, VecDeque<i64>> {
     let (input, _) = tag("Starting items: ")(input)?;
     let (input, values) = separated_list0(tag(", "), integer)(input)?;
     Ok((input, VecDeque::from(values)))
@@ -191,16 +202,16 @@ fn main() -> std::io::Result<()> {
     file.read_to_string(&mut content)?;
     let (_, mut troop) = troop(&content).unwrap();
     println!("{} monkeys in the troop", troop.monkeys.len());
-    for _ in 0..20 {
+    for _ in 0..10000 {
         troop.round();
     }
-    let mut touched_items: Vec<u32> = troop
+    let mut touched_items: Vec<u64> = troop
         .monkeys
         .iter()
         .map(|m| m.borrow().handle_counter)
         .collect();
     touched_items.sort();
-    let top_2_monkeys = touched_items.pop().unwrap() * touched_items.pop().unwrap();
+    let top_2_monkeys: u64 = touched_items.pop().unwrap() * touched_items.pop().unwrap();
     println!("Monkey business is {}", top_2_monkeys);
     Ok(())
 }
