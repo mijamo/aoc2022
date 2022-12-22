@@ -43,6 +43,21 @@ impl Grid {
             && pos.y < self.lines.len().try_into().unwrap()
     }
 
+    fn low_positions(&self) -> Vec<Position> {
+        let mut low_positions = Vec::<Position>::new();
+        for (y, line) in self.lines.iter().enumerate() {
+            for (x, cell) in line.iter().enumerate() {
+                if cell.altitude() == 1 {
+                    low_positions.push(Position {
+                        x: x.try_into().unwrap(),
+                        y: y.try_into().unwrap(),
+                    })
+                }
+            }
+        }
+        low_positions
+    }
+
     fn origin(&self) -> Option<Position> {
         for (y, line) in self.lines.iter().enumerate() {
             for (x, cell) in line.iter().enumerate() {
@@ -115,7 +130,7 @@ impl<'a> PathExplorer<'a> {
         return valid_moves;
     }
 
-    fn explore(&mut self) -> Path {
+    fn explore(&mut self) -> Option<Path> {
         loop {
             let mut next_paths = Vec::<Path>::new();
             if self.current_paths.is_empty() {
@@ -127,7 +142,7 @@ impl<'a> PathExplorer<'a> {
                     let mut new_path = existing.clone();
                     new_path.push(*next_move);
                     if next_move == &self.destination {
-                        return new_path;
+                        return Some(new_path);
                     }
                     self.touched_positions.insert(*next_move);
                     next_paths.push(new_path);
@@ -135,7 +150,7 @@ impl<'a> PathExplorer<'a> {
             }
             self.current_paths = next_paths;
         }
-        panic!("Did not find a path")
+        None
     }
 }
 
@@ -155,9 +170,15 @@ fn main() -> std::io::Result<()> {
         })
         .collect();
     let grid = Grid { lines: grid_lines };
-    let mut explorer =
-        PathExplorer::new(&grid, grid.origin().unwrap(), grid.destination().unwrap());
-    let final_path = explorer.explore();
-    println!("The final path took {} steps", final_path.len() - 1);
+    let closest = grid
+        .low_positions()
+        .iter()
+        .filter_map(|pos| {
+            let mut explorer = PathExplorer::new(&grid, *pos, grid.destination().unwrap());
+            explorer.explore().and_then(|p| Some(p.len() - 1))
+        })
+        .min()
+        .unwrap();
+    println!("The shortest path took {} steps", closest);
     Ok(())
 }
