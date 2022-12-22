@@ -108,6 +108,33 @@ impl Program {
     fn signal_strength(&self) -> i32 {
         return self.register.value * <u32 as TryInto<i32>>::try_into(self.register.cycle).unwrap();
     }
+
+    fn current_pixel(&self) -> char {
+        let diff = i32::abs_diff(
+            self.register.value,
+            (<u32 as TryInto<i32>>::try_into(self.register.cycle).unwrap() - 1) % 40,
+        );
+        if diff <= 1 {
+            return '#';
+        }
+        '.'
+    }
+
+    fn crt_line(&mut self) {
+        let line: String = (0..40)
+            .map(|_| {
+                self.start_cycle();
+                let pixel = self.current_pixel();
+                self.end_cycle();
+                return pixel;
+            })
+            .collect();
+        println!("{}", line);
+    }
+
+    fn run(&mut self) {
+        (0..6).for_each(|_| self.crt_line());
+    }
 }
 
 fn main() -> std::io::Result<()> {
@@ -125,17 +152,7 @@ fn main() -> std::io::Result<()> {
         instructions.push(Rc::new(instruction));
     }
     let mut program = Program::new(instructions);
-    let target_cycles: [u32; 6] = [20, 60, 100, 140, 180, 220];
-    let total_strength: i32 = target_cycles
-        .into_iter()
-        .map(|step| {
-            program.run_until(step);
-            program.signal_strength()
-        })
-        .sum();
-    println!(
-        "Total signal strength for the targetted cycles: {}",
-        total_strength
-    );
+    program.run();
+    println!("Ended at cycle {}", program.register.cycle);
     Ok(())
 }
