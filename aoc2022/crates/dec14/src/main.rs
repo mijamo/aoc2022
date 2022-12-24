@@ -110,11 +110,7 @@ impl Arena {
     }
 
     fn generate_sand(&mut self) -> ExploreResult {
-        self.try_point(&Pos {
-            x: self.origin.x,
-            y: self.origin.y + 1,
-        })
-        .and_then(|fall_point| {
+        self.try_point(&self.origin).and_then(|fall_point| {
             self.cells.insert(fall_point, Cell::Sand);
             Ok(fall_point)
         })
@@ -129,11 +125,13 @@ impl Arena {
 
     fn try_point(&self, pos: &Pos) -> ExploreResult {
         let current_cell = self.at(pos);
-        if current_cell.is_some() {
-            return Err(Impossible::Blocked);
+        match current_cell {
+            Some(Cell::Origin) => {}
+            None => {}
+            Some(_) => return Err(Impossible::Blocked),
         }
-        if !self.in_bounds(pos) {
-            return Err(Impossible::OutOfBounds);
+        if pos.y == self.bounds.south + 2 {
+            return Err(Impossible::Blocked);
         }
         let under = Pos {
             x: pos.x,
