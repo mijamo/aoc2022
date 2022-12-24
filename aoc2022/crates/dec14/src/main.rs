@@ -62,11 +62,12 @@ struct Arena {
     bounds: Bounds,
 }
 
-enum ExploreResult {
-    Possible(Pos),
+enum Impossible {
     Blocked,
     OutOfBounds,
 }
+
+type ExploreResult = Result<Pos, Impossible>;
 
 impl Arena {
     fn new(input: &Vec<Vec<Pos>>) -> Self {
@@ -89,7 +90,6 @@ impl Arena {
                 x_range.sort();
                 let mut y_range = [first_point.y, next_point.y];
                 y_range.sort();
-                println!("X line: {:?}, Y line: {:?}", x_range, y_range);
                 for x in x_range[0]..x_range[1] + 1 {
                     for y in y_range[0]..y_range[1] + 1 {
                         cells.insert(Pos { x, y }, Cell::Rock);
@@ -109,15 +109,15 @@ impl Arena {
         self.cells.get(pos)
     }
 
-    fn generate_sand(&mut self) -> Result<(), FullCaveError> {
-        match self.try_under(&self.origin) {
-            Some(fall_point) => {
-                println!("Sand at {:?}", fall_point);
-                self.cells.insert(fall_point, Cell::Sand);
-                Ok(())
-            }
-            None => Err(FullCaveError {}),
-        }
+    fn generate_sand(&mut self) -> ExploreResult {
+        self.try_point(&Pos {
+            x: self.origin.x,
+            y: self.origin.y + 1,
+        })
+        .and_then(|fall_point| {
+            self.cells.insert(fall_point, Cell::Sand);
+            Ok(fall_point)
+        })
     }
 
     fn in_bounds(&self, pos: &Pos) -> bool {
@@ -127,42 +127,18 @@ impl Arena {
             && pos.y <= self.bounds.south;
     }
 
-    fn fall_to_solid(&self, pos: &Pos) -> Option<Pos> {
-        let mut current_pos = *pos;
-        let mut next_pos = Pos {
+    fn try_point(&self, pos: &Pos) -> ExploreResult {
+        let current_cell = self.at(pos);
+        if current_cell.is_some() {
+            return Err(Impossible::Blocked);
+        }
+        if !self.in_bounds(pos) {
+            return Err(Impossible::OutOfBounds);
+        }
+        let under = Pos {
             x: pos.x,
             y: pos.y + 1,
         };
-        let mut current_cell = self.at(&current_pos);
-        let mut next_cell = self.at(&next_pos);
-        loop {
-            println!("Next: {:?}", next_pos);
-            if !self.in_bounds(&next_pos) {
-                return None;
-            }
-            match next_cell {
-                Some(_) => match current_cell {
-                    Some(_) => return None,
-                    None => return Some(current_pos),
-                },
-                None => {}
-            };
-            current_pos.y += 1;
-            next_pos.y += 1;
-            current_cell = self.at(&current_pos);
-            next_cell = self.at(&next_pos);
-        }
-    }
-
-    fn try_under(&self, pos: &Pos) -> Option<Pos> {
-        self.fall_to_solid(&pos)
-            .and_then(|fall_point| match self.try_around(&fall_point) {
-                None => Some(fall_point),
-                Some(side_point) => Some(side_point),
-            })
-    }
-
-    fn try_around(&self, pos: &Pos) -> Option<Pos> {
         let bottom_left = Pos {
             x: pos.x - 1,
             y: pos.y + 1,
@@ -171,13 +147,26 @@ impl Arena {
             x: pos.x + 1,
             y: pos.y + 1,
         };
-        self.try_under(&bottom_left)
-            .or_else(|| self.try_under(&bottom_right))
+        match self.try_point(&under) {
+            Err(Impossible::OutOfBounds) => return Err(Impossible::OutOfBounds),
+            Ok(res) => return Ok(res),
+            _ => {}
+        }
+        match self.try_point(&bottom_left) {
+            Err(Impossible::OutOfBounds) => return Err(Impossible::OutOfBounds),
+            Ok(res) => return Ok(res),
+            _ => {}
+        }
+        match self.try_point(&bottom_right) {
+            Err(Impossible::OutOfBounds) => return Err(Impossible::OutOfBounds),
+            Err(Impossible::Blocked) => return Ok(*pos),
+            Ok(res) => return Ok(res),
+        }
     }
 
     fn print_pattern(&self) {
-        for y in self.bounds.north..self.bounds.south + 1 {
-            let line: String = (self.bounds.west..self.bounds.east + 1)
+        for y in self.bounds.north..self.bounds.south + 2 {
+            let line: String = (self.bounds.west - 1..self.bounds.east + 2)
                 .map(|x| match self.at(&Pos { x, y }) {
                     Some(Cell::Origin) => '*',
                     Some(Cell::Rock) => '#',
@@ -214,18 +203,21 @@ fn scan(input: &str) -> IResult<&str, Vec<Vec<Pos>>> {
 }
 
 fn main() -> std::io::Result<()> {
-    let mut file = File::open("./src/test.txt")?;
+    let mut file = File::open("./src/input.txt")?;
     let mut content = String::new();
     file.read_to_string(&mut content).unwrap();
     let (_, layout) = scan(&content).unwrap();
     let mut arena = Arena::new(&layout);
-    println!("{} cells parsed", arena.cells.len());
     arena.print_pattern();
-    println!("Bounds for arena: {:#?}", arena.bounds);
     let mut sand_added = 0;
     while let Ok(_) = arena.generate_sand() {
         sand_added += 1;
     }
+    println!();
+    println!();
+    println!("RESULTS");
+    println!();
+    println!();
     arena.print_pattern();
     println!("Added {} units of sand until it is full", sand_added);
     Ok(())
