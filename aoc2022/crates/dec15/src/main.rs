@@ -55,7 +55,7 @@ impl MultiRange {
                 new_range.start.cmp(&current.end),
                 new_range.end.cmp(&current.start),
             ) {
-                (Ordering::Less, Ordering::Greater) => {
+                (Ordering::Less | Ordering::Equal, Ordering::Greater | Ordering::Equal) => {
                     new_range = Range {
                         start: i32::min(current.start, new_range.start),
                         end: i32::max(current.end, new_range.end),
@@ -67,6 +67,7 @@ impl MultiRange {
             }
         }
         new_elements.push(Rc::new(new_range));
+        new_elements.sort_unstable_by_key(|r| r.start);
         self.elements = new_elements;
     }
 
@@ -82,6 +83,15 @@ impl MultiRange {
     fn contains(&self, value: &i32) -> bool {
         self.elements.iter().any(|r| r.contains(value))
     }
+
+    fn contains_range(&self, range: &Range<i32>) -> bool {
+        self.elements.iter().any(|other| {
+            match (other.start.cmp(&range.start), other.end.cmp(&range.end)) {
+                (Ordering::Less | Ordering::Equal, Ordering::Greater | Ordering::Equal) => true,
+                (_, _) => false,
+            }
+        })
+    }
 }
 
 impl Arena {
@@ -89,7 +99,7 @@ impl Arena {
         Self { layout }
     }
 
-    fn rule_out_at(&self, line: i32) -> usize {
+    fn rule_out_at(&self, line: i32) -> MultiRange {
         let mut ruled_out = MultiRange::new();
         let mut beacons_on_line: HashSet<i32> = HashSet::new();
         for pair in self.layout.iter() {
@@ -106,11 +116,7 @@ impl Arena {
             let max_x = pair.sensor.x + max_delta + 1;
             ruled_out.add(min_x..max_x);
         }
-        ruled_out.len()
-            - beacons_on_line
-                .iter()
-                .filter(|p| ruled_out.contains(p))
-                .count()
+        ruled_out
     }
 }
 
@@ -137,7 +143,27 @@ fn main() -> std::io::Result<()> {
     let (_, data) = scan(&content).unwrap();
     println!("{} pairs parsed", data.len());
     let arena = Arena::new(data);
-    let ruled_out = arena.rule_out_at(2000000);
-    println!("{} cells ruled out", ruled_out);
+    let MAX = 4000000;
+    let RANGE = 0..MAX + 1;
+    let mut res_y = 0;
+    let mut res_x = 0;
+    for y in RANGE.clone() {
+        let ruled_out = arena.rule_out_at(y);
+        if ruled_out.contains_range(&RANGE) {
+            continue;
+        }
+        println!("y is {}", y);
+        res_y = y;
+        for x in RANGE.clone() {
+            if !ruled_out.contains(&x) {
+                println!("x is {}", x);
+                res_x = x;
+            }
+        }
+    }
+    println!(
+        "Tuning frequency is {}",
+        4000000 * res_x as i64 + res_y as i64
+    );
     Ok(())
 }
