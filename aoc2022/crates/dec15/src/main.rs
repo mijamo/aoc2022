@@ -2,9 +2,12 @@ use nom::bytes::complete::tag;
 use nom::character::complete::line_ending;
 use nom::multi::separated_list1;
 use nom::{character::complete::i32 as number, sequence::preceded, IResult};
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
+use std::ops::{Mul, Range};
+use std::rc::Rc;
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
 struct Pos {
@@ -33,13 +36,61 @@ struct Arena {
     layout: Vec<Pair>,
 }
 
+struct MultiRange {
+    elements: Vec<Rc<Range<i32>>>,
+}
+
+impl MultiRange {
+    fn new() -> Self {
+        Self {
+            elements: Vec::new(),
+        }
+    }
+
+    fn add(&mut self, range: Range<i32>) {
+        let mut new_range: Range<i32> = range;
+        let mut new_elements: Vec<Rc<Range<i32>>> = Vec::new();
+        for current in self.elements.iter() {
+            match (
+                new_range.start.cmp(&current.end),
+                new_range.end.cmp(&current.start),
+            ) {
+                (Ordering::Less, Ordering::Greater) => {
+                    new_range = Range {
+                        start: i32::min(current.start, new_range.start),
+                        end: i32::max(current.end, new_range.end),
+                    };
+                }
+                _ => {
+                    new_elements.push(current.clone());
+                }
+            }
+        }
+        new_elements.push(Rc::new(new_range));
+        self.elements = new_elements;
+    }
+
+    fn len(&self) -> usize {
+        self.elements
+            .iter()
+            .map(|r| r.end - r.start)
+            .sum::<i32>()
+            .try_into()
+            .unwrap()
+    }
+
+    fn contains(&self, value: &i32) -> bool {
+        self.elements.iter().any(|r| r.contains(value))
+    }
+}
+
 impl Arena {
     fn new(layout: Vec<Pair>) -> Self {
         Self { layout }
     }
 
     fn rule_out_at(&self, line: i32) -> usize {
-        let mut ruled_out: HashSet<i32> = HashSet::new();
+        let mut ruled_out = MultiRange::new();
         let mut beacons_on_line: HashSet<i32> = HashSet::new();
         for pair in self.layout.iter() {
             let d_y = i32::abs_diff(pair.sensor.y, line);
@@ -50,12 +101,16 @@ impl Arena {
             if d_y > radius {
                 continue;
             }
-            for d_x in 0..radius + 1 - d_y {
-                ruled_out.insert(pair.sensor.x + d_x as i32);
-                ruled_out.insert(pair.sensor.x - d_x as i32);
-            }
+            let max_delta = (radius - d_y) as i32;
+            let min_x = pair.sensor.x - max_delta;
+            let max_x = pair.sensor.x + max_delta + 1;
+            ruled_out.add(min_x..max_x);
         }
-        ruled_out.difference(&beacons_on_line).count()
+        ruled_out.len()
+            - beacons_on_line
+                .iter()
+                .filter(|p| ruled_out.contains(p))
+                .count()
     }
 }
 
