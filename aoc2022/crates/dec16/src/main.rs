@@ -4,7 +4,9 @@ use nom::multi::separated_list1;
 use nom::{bytes::complete::tag, character::complete::alpha1};
 use nom::{sequence::preceded, IResult};
 use std::cell::{Ref, RefCell};
+use std::collections::VecDeque;
 use std::fs::File;
+use std::hash::Hash;
 use std::io::Read;
 use std::{
     collections::{HashMap, HashSet},
@@ -51,27 +53,33 @@ impl<'a> PathExplorer<'a> {
     }
 }
 
-fn combinations<T>(input: &Vec<Vec<Option<T>>>) -> Vec<Vec<Option<T>>>
+fn combinations<T>(input: HashSet<T>, len: usize) -> Vec<Vec<Option<T>>>
 where
-    T: Copy + Eq,
+    T: Copy + Eq + Hash,
 {
-    let mut combinations: Vec<Vec<Option<T>>> = Vec::from([Vec::new()]);
-    for actor in input {
-        let mut next_combinations = Vec::new();
-        for combination in combinations.iter_mut() {
-            for position in actor {
-                let mut next_combination = combination.clone();
-                if combination.iter().any(|m| m == position) {
-                    next_combination.push(None);
-                } else {
-                    next_combination.push(*position);
-                }
-                next_combinations.push(next_combination);
-            }
-        }
-        combinations = next_combinations;
+    let mut results: Vec<Vec<Option<T>>> = Vec::new();
+    if len == 0 {
+        return Vec::new();
     }
-    return combinations;
+    if len == 1 {
+        if input.len() == 0 {
+            return Vec::from([Vec::from([None])]);
+        }
+        return input.iter().map(|o| Vec::from([Some(*o)])).collect();
+    }
+    if input.len() == 0 {
+        return Vec::from([(0..len).into_iter().map(|_| None).collect()]);
+    }
+    for v in input.iter() {
+        let mut next_set = input.clone();
+        next_set.remove(&v);
+        for c in combinations(next_set, len - 1) {
+            let start = Vec::from([Some(*v)]);
+            results.push([start, c].concat());
+        }
+    }
+    assert_eq!(results.iter().map(|r| r.len()).min().unwrap(), 2);
+    return results;
 }
 
 struct Arena<'a> {
@@ -108,6 +116,7 @@ impl<'a> Arena<'a> {
             flow: 0,
             pressure: 0,
             activated: HashSet::new(),
+            chosen: HashSet::new(),
             turn: 0,
         }
         .eval()
@@ -122,6 +131,13 @@ impl<'a> Arena<'a> {
 struct Actor<'a> {
     destination: Option<&'a str>,
     remaining_time: u32,
+    last_position: &'a str,
+}
+
+impl<'a> Actor<'a> {
+    fn is_available(&self) -> bool {
+        return self.remaining_time == 0 && self.destination.is_none();
+    }
 }
 
 struct Scenario<'a> {
@@ -130,6 +146,7 @@ struct Scenario<'a> {
     flow: u32,
     pressure: u32,
     activated: HashSet<&'a str>,
+    chosen: HashSet<&'a str>,
     turn: u32,
 }
 
@@ -137,25 +154,20 @@ impl<'a> Scenario<'a> {
     fn eval(&mut self) -> u32 {
         self.turn += 1;
         self.pressure += self.flow;
-        if self.turn == 31 {
+        if self.turn == 27 {
             return self.pressure;
         }
-        let mut next_moves: Vec<Vec<Option<&str>>> = Vec::new();
         for actor in self.actors.iter_mut() {
             let mut next_actions: Vec<Option<&str>> = Vec::new();
             match (actor.remaining_time, actor.destination) {
                 (1, Some(destination)) => {
                     self.activated.insert(destination);
                     self.flow += self.arena.get(destination).flow;
-                    for remaining in self.arena.relevant_valves.difference(&self.activated) {
-                        next_actions.push(Some(&remaining));
+                    if self.activated.len() == self.arena.relevant_valves.len() + 1 {
+                        return (27 - self.turn) * self.flow + self.pressure;
                     }
-                    if next_actions.len() == 0 {
-                        // reached and activated the last valve
-                        actor.destination = None;
-                        actor.remaining_time = 0;
-                        next_actions.push(None);
-                    }
+                    actor.remaining_time -= 1;
+                    actor.last_position = destination;
                 }
                 (_, Some(_)) => {
                     actor.remaining_time -= 1;
@@ -165,9 +177,19 @@ impl<'a> Scenario<'a> {
                     next_actions.push(None);
                 }
             }
-            next_moves.push(next_actions);
         }
-        return combinations(&next_moves)
+        let available_actors = self.actors.iter().filter(|a| a.remaining_time == 0).count();
+        let next_moves: HashSet<&str> = self
+            .arena
+            .relevant_valves
+            .difference(&self.chosen)
+            .map(|r| *r)
+            .collect();
+        let possibilities = combinations(next_moves, available_actors);
+        if possibilities.len() == 0 {
+            return self.alternate(&Vec::new()).eval();
+        }
+        return possibilities
             .iter()
             .map(|c| self.alternate(c).eval())
             .max()
@@ -176,22 +198,29 @@ impl<'a> Scenario<'a> {
 
     fn alternate(&self, next_moves: &Vec<Option<&'a str>>) -> Self {
         let mut new_actors = Vec::new();
-        for (i, next_position) in next_moves.iter().enumerate() {
-            let mut actor = self.actors.get(i).unwrap().clone();
-            match next_position {
-                None => {}
-                Some(pos) => {
-                    actor.remaining_time = self
-                        .arena
-                        .distances
-                        .get(&(actor.destination.unwrap(), pos))
-                        .unwrap()
-                        .clone()
-                        + 1;
-                    actor.destination = Some(pos);
+        let mut next_moves = VecDeque::from_iter(next_moves.iter());
+        let mut next_chosen = self.chosen.clone();
+        for actor in self.actors.iter() {
+            let mut new_actor = actor.clone();
+            if new_actor.remaining_time == 0 {
+                match next_moves.pop_front().unwrap() {
+                    None => {
+                        new_actor.destination = None;
+                    }
+                    Some(pos) => {
+                        new_actor.remaining_time = self
+                            .arena
+                            .distances
+                            .get(&(actor.last_position, pos))
+                            .unwrap()
+                            .clone()
+                            + 1;
+                        new_actor.destination = Some(pos);
+                        next_chosen.insert(pos);
+                    }
                 }
             }
-            new_actors.push(actor);
+            new_actors.push(new_actor);
         }
         Self {
             actors: new_actors,
@@ -200,6 +229,7 @@ impl<'a> Scenario<'a> {
             pressure: self.pressure,
             activated: self.activated.clone(),
             turn: self.turn,
+            chosen: next_chosen,
         }
     }
 }
@@ -243,16 +273,24 @@ fn valves(input: &str) -> IResult<&str, Vec<InnerValve>> {
 }
 
 fn main() {
-    let mut file = File::open("./src/test.txt").unwrap();
+    let mut file = File::open("./src/input.txt").unwrap();
     let mut content = String::new();
     file.read_to_string(&mut content).unwrap();
     let (_, valves) = valves(&content).unwrap();
     println!("parsed {} valves", valves.len());
     let arena = Arena::new(&valves);
     println!("Generated the arena");
-    let potential = arena.try_scenario(Vec::from([Actor {
-        destination: Some("AA"),
-        remaining_time: 1,
-    }]));
+    let potential = arena.try_scenario(Vec::from([
+        Actor {
+            destination: Some("AA"),
+            remaining_time: 1,
+            last_position: "AA",
+        },
+        Actor {
+            destination: Some("AA"),
+            remaining_time: 1,
+            last_position: "AA",
+        },
+    ]));
     println!("The maximum potential of valves is {}", potential);
 }
