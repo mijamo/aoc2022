@@ -171,6 +171,7 @@ impl PixelTable {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 enum Effect {
     Wind,
     Fall,
@@ -210,6 +211,17 @@ impl World {
                 self.generate_rock();
             }
         }
+    }
+
+    fn tallest(&self) -> u32 {
+        self.rocks
+            .iter()
+            .filter(|r| r.moving.is_none())
+            .map(|r| r.top())
+            .max()
+            .or(Some(0))
+            .unwrap()
+            + 1
     }
 
     fn generate_rock(&mut self) {
@@ -379,19 +391,12 @@ fn main() -> std::io::Result<()> {
         })
         .collect();
     let mut world = World::new(wind_pattern);
-    while world.rocks.len() < 2023 {
+    let mut turns = 1;
+    let mut successes = 0;
+    while world.rocks.len() <= 1090 {
         world.turn();
     }
-    let tallest = world
-        .rocks
-        .iter()
-        .filter(|r| r.moving.is_none())
-        .map(|r| r.top())
-        .max()
-        .or(Some(0))
-        .unwrap()
-        + 1;
-    println!("Tallest rock stands {} high", tallest);
+    println!("Tallest rock stands {} high", world.tallest());
     println!("There are {} rocks in the world", world.rocks.len());
     //world.print();
     Ok(())
