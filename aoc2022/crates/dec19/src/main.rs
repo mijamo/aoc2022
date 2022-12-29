@@ -259,6 +259,7 @@ impl<'a> ScenarioTester<'a> {
             .iter()
             .map(|s| s.resources.geode)
             .max()
+            .or(Some(0))
             .unwrap()
     }
 
@@ -276,21 +277,42 @@ impl<'a> ScenarioTester<'a> {
                 next_scenarios.push(scenario.next_move(ProdChoice::Geode));
                 continue 'scena;
             }
-            if scenario.resources.can_afford_ore_robot(self.blueprint) && !scenario.has_enough_ore()
-            {
-                next_scenarios.push(scenario.next_move(ProdChoice::Ore));
+            let aff_ore = scenario.resources.can_afford_ore_robot(self.blueprint);
+            let aff_clay = scenario.resources.can_afford_clay_robot(self.blueprint);
+            let aff_obs = scenario.resources.can_afford_obsidian_robot(self.blueprint);
+            let should_ore = !scenario.has_enough_ore();
+            let should_clay = !scenario.has_enough_clay();
+            let should_obs = !scenario.has_enough_obsidian();
+            let prod_clay = scenario.robots.clay > 0;
+            let prod_obs = scenario.robots.obsidian > 0;
+            let mut should_wait = false;
+            if should_ore {
+                if aff_ore {
+                    next_scenarios.push(scenario.next_move(ProdChoice::Ore));
+                } else {
+                    should_wait = true;
+                }
             }
-            if scenario.resources.can_afford_clay_robot(self.blueprint)
-                && !scenario.has_enough_clay()
-            {
-                next_scenarios.push(scenario.next_move(ProdChoice::Clay));
+            if should_clay {
+                if aff_clay {
+                    next_scenarios.push(scenario.next_move(ProdChoice::Clay));
+                } else {
+                    should_wait = true;
+                }
             }
-            if scenario.resources.can_afford_obsidian_robot(self.blueprint)
-                && !scenario.has_enough_obsidian()
-            {
-                next_scenarios.push(scenario.next_move(ProdChoice::Obsidian));
+            if should_obs {
+                if aff_obs {
+                    next_scenarios.push(scenario.next_move(ProdChoice::Obsidian));
+                } else if prod_clay {
+                    should_wait = true;
+                }
             }
-            next_scenarios.push(scenario.next_move(ProdChoice::None));
+            if prod_obs {
+                should_wait = true
+            }
+            if should_wait {
+                next_scenarios.push(scenario.next_move(ProdChoice::None))
+            }
         }
         let safe_potential = next_scenarios
             .iter()
@@ -375,14 +397,14 @@ fn blueprints(input: &str) -> IResult<&str, Vec<Blueprint>> {
 
 fn main() {
     let mut content = String::new();
-    let mut file = File::open("./src/input.txt").unwrap();
+    let mut file = File::open("./src/test.txt").unwrap();
     file.read_to_string(&mut content).unwrap();
     let (_, blueprints) = blueprints(&content).unwrap();
     println!("Parsed {} blueprints", blueprints.len());
     let mut quality_level = 0;
     for blueprint in blueprints.iter() {
         let mut explorer = ScenarioTester::new(blueprint);
-        let result = explorer.run_until(24);
+        let result = explorer.run_until(32);
         println!("Scenario {} gave {} geodes at most", blueprint.id, result);
         quality_level += result * blueprint.id;
     }
