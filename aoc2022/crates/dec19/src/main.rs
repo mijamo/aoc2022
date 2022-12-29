@@ -127,7 +127,6 @@ impl PartialOrd for RobotsCount {
 }
 
 struct Scenario<'a> {
-    sequence: Vec<ProdChoice>,
     resources: Resources,
     robots: RobotsCount,
     blueprint: &'a Blueprint,
@@ -136,7 +135,6 @@ struct Scenario<'a> {
 impl<'a> Scenario<'a> {
     fn new(blueprint: &'a Blueprint) -> Self {
         Self {
-            sequence: Vec::new(),
             resources: Resources {
                 clay: 0,
                 ore: 0,
@@ -179,13 +177,10 @@ impl<'a> Scenario<'a> {
             }
             _ => {}
         };
-        let mut sequence = self.sequence.clone();
-        sequence.push(choice);
         //println!("Resources: {:?}", resources);
         //println!("Robots: {:?}", robots);
         Self {
             robots,
-            sequence,
             resources,
             blueprint: self.blueprint,
         }
@@ -206,7 +201,14 @@ impl<'a> Scenario<'a> {
     }
 
     fn max_potential(&self, remaining: u32) -> u32 {
-        self.resources.geode + self.robots.geode * remaining + remaining * remaining / 2
+        let first_geode = if self.robots.clay == 0 {
+            remaining.checked_sub(3).or(Some(0)).unwrap()
+        } else if self.robots.obsidian == 0 {
+            remaining.checked_sub(2).or(Some(0)).unwrap()
+        } else {
+            remaining.checked_sub(1).or(Some(0)).unwrap()
+        };
+        self.resources.geode + self.robots.geode * remaining + first_geode * first_geode / 2
     }
 
     fn safe_potential(&self, remaining: u32) -> u32 {
@@ -262,9 +264,14 @@ impl<'a> ScenarioTester<'a> {
 
     fn next_move(&mut self, remaining: u32) {
         let mut next_scenarios = Vec::new();
-        println!("turn {}", self.turns + 1);
-        println!("{} scenarios", self.scenarios.len());
+        //println!("turn {}", self.turns + 1);
+        //println!("{} scenarios", self.scenarios.len());
         'scena: for (i, scenario) in self.scenarios.iter().enumerate() {
+            for other in self.scenarios[i + 1..].iter() {
+                if scenario < other {
+                    continue;
+                }
+            }
             if scenario.resources.can_afford_geode_robot(self.blueprint) {
                 next_scenarios.push(scenario.next_move(ProdChoice::Geode));
                 continue 'scena;
@@ -291,7 +298,6 @@ impl<'a> ScenarioTester<'a> {
             .max()
             .or(Some(9999999))
             .unwrap();
-        println!("Safe is {}", safe_potential);
         next_scenarios = next_scenarios
             .into_iter()
             .filter(|s| s.max_potential(remaining) >= safe_potential)
@@ -369,7 +375,7 @@ fn blueprints(input: &str) -> IResult<&str, Vec<Blueprint>> {
 
 fn main() {
     let mut content = String::new();
-    let mut file = File::open("./src/test.txt").unwrap();
+    let mut file = File::open("./src/input.txt").unwrap();
     file.read_to_string(&mut content).unwrap();
     let (_, blueprints) = blueprints(&content).unwrap();
     println!("Parsed {} blueprints", blueprints.len());
