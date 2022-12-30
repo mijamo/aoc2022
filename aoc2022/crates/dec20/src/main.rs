@@ -3,28 +3,20 @@ use std::io::{BufRead, BufReader};
 
 #[derive(Clone, Copy)]
 struct Elem {
-    value: i32,
+    value: i64,
     index: usize,
 }
 
-fn main() -> std::io::Result<()> {
-    let file = File::open("./src/input.txt")?;
-    let lines = BufReader::new(file).lines();
-    let values: Vec<i32> = lines.map(|l| l.unwrap().parse::<i32>().unwrap()).collect();
-    let values: Vec<Elem> = values
-        .into_iter()
-        .enumerate()
-        .map(|(i, v)| Elem { value: v, index: i })
-        .collect();
-    let length = values.len();
+fn mix(table: &Vec<Elem>, values: Vec<Elem>) -> Vec<Elem> {
+    let length = table.len();
     let mut result = values.clone();
-    for original in values.iter() {
+    for original in table.iter() {
         let current_index = result
             .iter()
             .position(|e| e.index == original.index)
             .unwrap();
         let mut new_index =
-            ((current_index as i32 + original.value).rem_euclid((length - 1) as i32)) as usize;
+            ((current_index as i64 + original.value).rem_euclid((length - 1) as i64)) as usize;
         if new_index == 0 && original.value != 0 {
             new_index = length - 1;
         }
@@ -45,6 +37,25 @@ fn main() -> std::io::Result<()> {
             }
         }
         result = next_result;
+    }
+    return result;
+}
+
+fn main() -> std::io::Result<()> {
+    let file = File::open("./src/input.txt")?;
+    let lines = BufReader::new(file).lines();
+    let values: Vec<i64> = lines
+        .map(|l| l.unwrap().parse::<i64>().unwrap() * 811589153)
+        .collect();
+    let table: Vec<Elem> = values
+        .into_iter()
+        .enumerate()
+        .map(|(i, v)| Elem { value: v, index: i })
+        .collect();
+    let length = table.len();
+    let mut result: Vec<Elem> = table.clone();
+    for _ in 0..10 {
+        result = mix(&table, result);
     }
     let message_start = result.iter().position(|e| e.value == 0).unwrap();
     let x = result[(message_start + 1000) % length].value;
