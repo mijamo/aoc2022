@@ -2,8 +2,9 @@ use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::line_ending;
 use nom::multi::separated_list1;
+use nom::number::complete::double as number;
 use nom::{
-    character::complete::{alpha1, i64 as number, one_of, space1},
+    character::complete::{alpha1, one_of, space1},
     IResult,
 };
 use std::collections::HashMap;
@@ -17,7 +18,7 @@ enum Operation {
 }
 
 impl Operation {
-    fn apply(&self, lhs: &i64, rhs: &i64) -> i64 {
+    fn apply(&self, lhs: &f64, rhs: &f64) -> f64 {
         match self {
             Self::Add => lhs + rhs,
             Self::Divide => lhs / rhs,
@@ -35,7 +36,7 @@ struct OperationMonkey<'a> {
 
 enum MonkeyType<'a> {
     Operation(OperationMonkey<'a>),
-    Value(i64),
+    Value(f64),
 }
 
 struct Monkey<'a> {
@@ -44,17 +45,16 @@ struct Monkey<'a> {
 }
 
 struct Troop<'a> {
-    values: HashMap<&'a str, i64>,
+    values: HashMap<&'a str, f64>,
     monkeys: Vec<Monkey<'a>>,
 }
 
 impl<'a> Troop<'a> {
     fn new(monkeys: Vec<Monkey<'a>>) -> Self {
-        let values = HashMap::from_iter(monkeys.iter().filter_map(|m| match m.kind {
-            MonkeyType::Value(v) => Some((m.id, v)),
-            _ => None,
-        }));
-        Self { monkeys, values }
+        Self {
+            monkeys,
+            values: HashMap::new(),
+        }
     }
 
     fn move_up(&mut self) {
@@ -77,7 +77,12 @@ impl<'a> Troop<'a> {
         })
     }
 
-    fn compute(&mut self) -> i64 {
+    fn compute(&mut self, initial_value: f64) -> f64 {
+        self.values = HashMap::from_iter(self.monkeys.iter().filter_map(|m| match m.kind {
+            MonkeyType::Value(v) => Some((m.id, v)),
+            _ => None,
+        }));
+        self.values.insert("humn", initial_value);
         loop {
             self.move_up();
             match self.values.get("root") {
@@ -127,6 +132,24 @@ fn monkey(input: &str) -> IResult<&str, Monkey> {
     let (input, id) = alpha1(input)?;
     let (input, _) = tag(": ")(input)?;
     let (input, kind) = alt((value_monkey, operation_monkey))(input)?;
+    if id == "root" {
+        match kind {
+            MonkeyType::Operation(op) => {
+                return Ok((
+                    input,
+                    Monkey {
+                        id,
+                        kind: MonkeyType::Operation(OperationMonkey {
+                            lhs: op.lhs,
+                            rhs: op.rhs,
+                            operation: Operation::Substract,
+                        }),
+                    },
+                ));
+            }
+            _ => {}
+        }
+    }
     Ok((input, Monkey { id, kind }))
 }
 
@@ -141,6 +164,13 @@ fn main() {
     file.read_to_string(&mut content).unwrap();
     let (_, mut troop) = troop(&content).unwrap();
     println!("Parsed {} monkeys", troop.monkeys.len());
-    let res = troop.compute();
-    println!("The monkey yelled {}", res);
+    let own_value = 0.;
+    let first_res = troop.compute(own_value);
+    let second_res = troop.compute(own_value + 100000000000.);
+    println!("First got {} then {}", first_res, second_res);
+    let a = second_res - first_res;
+    let b = first_res;
+    println!("a={} and b={}", a, b);
+    let res = -b * 100000000000. / a;
+    println!("We should yell {}", res);
 }
