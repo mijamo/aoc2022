@@ -152,7 +152,7 @@ impl Game {
             .collect()
     }
 
-    fn make_movements(&mut self, mut movements: Vec<Option<Pos>>) {
+    fn make_movements(&mut self, mut movements: Vec<Option<Pos>>) -> usize {
         let length = movements.len();
         for i in 0..length {
             let first = movements[i];
@@ -175,13 +175,25 @@ impl Game {
             .for_each(|(i, movement)| match movement {
                 Some(pos) => self.elves[i] = *pos,
                 None => {}
-            })
+            });
+        return movements.iter().filter(|m| m.is_some()).count();
     }
 
-    fn round(&mut self) {
+    fn round(&mut self) -> usize {
         let movements = self.make_decision();
-        self.make_movements(movements);
+        let moves = self.make_movements(movements);
         self.tick += 1;
+        return moves;
+    }
+
+    fn run_to_completion(&mut self) {
+        loop {
+            println!("ROUND {}", self.tick + 1);
+            let moves = self.round();
+            if moves == 0 {
+                break;
+            }
+        }
     }
 
     fn print(&self) {
@@ -219,18 +231,10 @@ fn main() {
     }
     println!("{} elves on the map", elves.len());
     let mut game = Game::new(elves);
-    game.print();
-    let rounds = 10;
-    for i in 0..rounds {
-        game.round();
-        println!();
-        println!("ROUND {}", i + 1);
-        println!("Bounds: {:?}", game.bounds());
-        game.print();
-    }
+    game.run_to_completion();
     println!(
         "{} empty ground tiles after {} rounds",
         game.empty_in_bounds(),
-        rounds
+        game.tick
     );
 }
