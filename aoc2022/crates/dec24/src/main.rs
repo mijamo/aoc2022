@@ -57,6 +57,7 @@ struct World {
     scenarios: Vec<Pos>,
     bounds: Bounds,
     destination: Pos,
+    origin: Pos,
     turns: u32,
 }
 
@@ -66,10 +67,12 @@ impl World {
             y: bounds.south + 1,
             x: bounds.east,
         };
+        let origin = Pos { x: 1, y: 0 };
         Self {
             blizzards,
             bounds,
-            scenarios: Vec::from([Pos { x: 1, y: 0 }]),
+            scenarios: Vec::from([origin]),
+            origin,
             destination,
             turns: 0,
         }
@@ -148,7 +151,7 @@ impl World {
                 if taken_cells.contains(&pos)
                     || (!self.bounds.contains(&pos)
                         && pos != self.destination
-                        && pos != Pos { x: 1, y: 0 })
+                        && pos != self.origin)
                 {
                     continue;
                 }
@@ -183,7 +186,11 @@ impl World {
         }
     }
 
-    fn find_end(&mut self) -> u32 {
+    fn find_path(&mut self, from: Pos, to: Pos) -> u32 {
+        self.destination = to;
+        self.origin = from;
+        self.turns = 0;
+        self.scenarios = Vec::from([self.origin]);
         loop {
             match self.turn() {
                 Some(res) => return res,
@@ -240,6 +247,16 @@ fn main() {
             east: max_x - 1,
         },
     );
-    let res = world.find_end();
-    println!("It took {} turns to find the end", res);
+    let start = Pos { x: 1, y: 0 };
+    let end = Pos {
+        y: max_y,
+        x: max_x - 1,
+    };
+    let first_trip = world.find_path(start, end);
+    let back_trip = world.find_path(end, start);
+    let last_trip = world.find_path(start, end);
+    println!(
+        "It took {} turns to do the first trip, then {} back, finally {} to reach the end, for a total of {}",
+        first_trip, back_trip, last_trip, first_trip + back_trip + last_trip
+    );
 }
