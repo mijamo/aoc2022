@@ -42,7 +42,6 @@ impl<'a> PathExplorer<'a> {
                 Some(res) if res <= &distance => continue,
                 _ => {}
             }
-            println!("Distance to {}: {}", valve.id, distance);
             self.distances.insert(valve.id, distance);
             next_origins.push(valve_rc);
         }
@@ -78,7 +77,6 @@ where
             results.push([start, c].concat());
         }
     }
-    assert_eq!(results.iter().map(|r| r.len()).min().unwrap(), 2);
     return results;
 }
 
@@ -93,7 +91,6 @@ impl<'a> Arena<'a> {
         let mut distances: HashMap<(&str, &str), u32> = HashMap::new();
         for valve in valves.iter() {
             let id = valve.borrow().id;
-            println!("DISTANCES FROM {}", id);
             for (to, distance) in PathExplorer::new(valve).calculate(valve.clone(), 0).iter() {
                 distances.insert((id, to), *distance);
             }
@@ -179,6 +176,9 @@ impl<'a> Scenario<'a> {
             }
         }
         let available_actors = self.actors.iter().filter(|a| a.remaining_time == 0).count();
+        if available_actors == 0 {
+            return self.eval();
+        }
         let next_moves: HashSet<&str> = self
             .arena
             .relevant_valves
